@@ -1,7 +1,7 @@
 /*global chrome*/
 
-import { Box, Button, CircularProgress, Typography } from "@mui/material";
-import { useState } from "react";
+import { Box, Button, CircularProgress, Typography, TextField, Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
+import { useState, useEffect } from "react";
 import { Configuration, OpenAIApi } from "openai";
 
 function App() {
