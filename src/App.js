@@ -139,9 +139,15 @@ function App() {
   };
 
   useEffect(() => {
-    chrome.storage.sync.get(['apiKey', 'apiUrl'], (result) => {
+    chrome.storage.sync.get(['apiKey', 'apiUrl', 'selectedModel', 'apiUrlType'], (result) => {
+      console.log('Loaded settings:', result);
       if (result.apiKey) setApiKey(result.apiKey);
       if (result.apiUrl) setApiUrl(result.apiUrl);
+      if (result.selectedModel) setSelectedModel(result.selectedModel);
+      if (result.apiUrlType) {
+        setApiUrlType(result.apiUrlType);
+        setShowCustomUrl(result.apiUrlType === 'Custom');
+      }
     });
   }, []);
 
@@ -158,8 +164,12 @@ function App() {
 
   const handleApiUrlTypeChange = (e) => {
     const value = e.target.value;
+    console.log('API URL type changed:', value);
     setApiUrlType(value);
     setShowCustomUrl(value === 'Custom');
+    if (value !== 'Custom') {
+      setApiUrl(''); // Clear custom URL when switching to predefined
+    }
   };
 
   return (
