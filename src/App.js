@@ -19,9 +19,6 @@ import {
   Divider
 } from '@mui/material';
 import { useState, useEffect } from 'react';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import SettingsIcon from '@mui/icons-material/Settings';
-import SummarizeIcon from '@mui/icons-material/Summarize';
 
 function App() {
   const [summary, setSummary] = useState('');
@@ -330,10 +327,9 @@ function App() {
             <Button 
               variant='outlined' 
               onClick={() => setSettingsOpen(true)}
-              startIcon={<SettingsIcon />}
               size="small"
             >
-              Settings
+              ⚙️ Settings
             </Button>
           </Tooltip>
           
@@ -351,10 +347,9 @@ function App() {
             }}
             onClick={fetchSummary}
             disabled={loading || !selectedModel || !apiKey}
-            startIcon={loading ? <CircularProgress size={20} color='inherit' /> : <SummarizeIcon />}
             size="small"
           >
-            {loading ? 'Processing...' : 'Summarize'}
+            {loading ? <CircularProgress size={20} color='inherit' /> : '📝'} {loading ? 'Processing...' : 'Summarize'}
           </Button>
         </Box>
       </Paper>
@@ -376,7 +371,7 @@ function App() {
               sx={{ position: 'absolute', top: 5, right: 5 }}
               onClick={copyToClipboard}
             >
-              <ContentCopyIcon fontSize="small" />
+              📋
             </IconButton>
           </Tooltip>
         )}
@@ -480,7 +475,7 @@ function App() {
               size="small"
               disabled={loadingModels || !apiKey || (showCustomUrl && !apiUrl)}
             >
-              {loadingModels ? <CircularProgress size={20} /> : 'Refresh Models'}
+              {loadingModels ? <CircularProgress size={20} /> : '🔄 Refresh Models'}
             </Button>
           </Box>
           
