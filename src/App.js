@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  MenuItem,
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { Configuration, OpenAIApi } from 'openai';
@@ -19,9 +20,15 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const predefinedApiUrls = [
+    { name: 'OpenAI Official', url: 'https://api.openai.com/v1' },
+    { name: 'Custom', url: '' }
+  ];
   const [apiUrl, setApiUrl] = useState('https://api.openai.com/v1');
+  const [apiUrlType, setApiUrlType] = useState('https://api.openai.com/v1');
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [showCustomUrl, setShowCustomUrl] = useState(false);
 
   const getValidLengthText = (text) => {
     const validLength = 4 * 3200;
@@ -139,10 +146,20 @@ function App() {
   }, []);
 
   const saveSettings = () => {
-    chrome.storage.sync.set({ apiKey, apiUrl }, () => {
+    const finalUrl = apiUrlType === 'Custom' ? apiUrl : apiUrlType;
+    chrome.storage.sync.set({ apiKey, apiUrl: finalUrl }, () => {
+      setApiUrl(finalUrl);
       setSettingsOpen(false);
-      fetchModels();
+      if (finalUrl !== 'https://api.openai.com/v1') {
+        fetchModels();
+      }
     });
+  };
+
+  const handleApiUrlTypeChange = (e) => {
+    const value = e.target.value;
+    setApiUrlType(value);
+    setShowCustomUrl(value === 'Custom');
   };
 
   return (
@@ -202,12 +219,48 @@ function App() {
         <DialogTitle>API Settings</DialogTitle>
         <DialogContent>
           <TextField
+            select
             fullWidth
-            label='API URL'
-            value={apiUrl}
-            onChange={(e) => setApiUrl(e.target.value)}
+            label='API URL Type'
+            value={apiUrlType}
+            onChange={handleApiUrlTypeChange}
             margin='normal'
-          />
+          >
+            {predefinedApiUrls.map((option) => (
+              <MenuItem key={option.url} value={option.url}>
+                {option.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          {showCustomUrl && (
+            <TextField
+              fullWidth
+              label='Custom API URL'
+              value={apiUrl}
+              onChange={(e) => setApiUrl(e.target.value)}
+              margin='normal'
+            />
+          )}
+          {showCustomUrl && (
+            <Button onClick={fetchModels} variant="outlined" sx={{ mt: 2 }}>
+              Fetch Models
+            </Button>
+          )}
+          <TextField
+            select
+            fullWidth
+            label='Model'
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            margin='normal'
+            disabled={models.length === 0}
+          >
+            {models.map((model) => (
+              <MenuItem key={model.id} value={model.id}>
+                {model.id}
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             fullWidth
             label='API Key'
