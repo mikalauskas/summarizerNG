@@ -11,12 +11,20 @@ import {
   DialogContent,
   DialogActions,
   MenuItem,
+  Snackbar,
+  Alert,
+  Paper,
+  IconButton,
+  Tooltip,
+  Divider
 } from '@mui/material';
 import { useState, useEffect } from 'react';
-import { Configuration, OpenAIApi } from 'openai';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import SettingsIcon from '@mui/icons-material/Settings';
+import SummarizeIcon from '@mui/icons-material/Summarize';
 
 function App() {
-  const [text, setText] = useState();
+  const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
@@ -29,37 +37,81 @@ function App() {
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [showCustomUrl, setShowCustomUrl] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [loadingModels, setLoadingModels] = useState(false);
 
   const getValidLengthText = (text) => {
     const validLength = 4 * 3200;
-    return text.substr(0, validLength);
+    return text.substring(0, validLength);
+  };
+
+  const showNotification = (message, severity = 'info') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(summary)
+      .then(() => showNotification('Summary copied to clipboard!', 'success'))
+      .catch(() => showNotification('Failed to copy to clipboard', 'error'));
   };
 
   async function getCurrentTabHtml() {
-    let queryOptions = { active: true, currentWindow: true };
-    const tabs = await chrome.tabs.query(queryOptions);
-
-    let result;
     try {
-      [{ result }] = await chrome.scripting.executeScript({
-        target: { tabId: tabs[0].id },
-        func: () => document.documentElement.innerText,
-      });
-    } catch (e) {
-      console.log(e);
-    }
+      let queryOptions = { active: true, currentWindow: true };
+      const tabs = await chrome.tabs.query(queryOptions);
+      
+      if (!tabs || tabs.length === 0) {
+        throw new Error('No active tab found');
+      }
 
-    return result;
+      let result;
+      try {
+        [{ result }] = await chrome.scripting.executeScript({
+          target: { tabId: tabs[0].id },
+          func: () => document.documentElement.innerText,
+        });
+      } catch (e) {
+        console.error('Script execution error:', e);
+        throw new Error(`Cannot access page content: ${e.message}`);
+      }
+
+      return result || '';
+    } catch (error) {
+      console.error('Error getting tab HTML:', error);
+      throw error;
+    }
   }
 
   const fetchSummary = async () => {
-    setLoading(true);
+    if (!apiKey) {
+      showNotification('Please set your API key in settings', 'warning');
+      setSettingsOpen(true);
+      return;
+    }
 
-    // Get and parse inner html of active tab
-    const tabInnerHtmlText = await getCurrentTabHtml();
-    const validPrompt = getValidLengthText(tabInnerHtmlText);
+    if (!selectedModel) {
+      showNotification('Please select a model in settings', 'warning');
+      setSettingsOpen(true);
+      return;
+    }
+
+    setLoading(true);
+    setSummary('');
 
     try {
+      // Get and parse inner html of active tab
+      const tabInnerHtmlText = await getCurrentTabHtml();
+      
+      if (!tabInnerHtmlText || tabInnerHtmlText.trim() === '') {
+        throw new Error('No content found on this page');
+      }
+      
+      const validPrompt = getValidLengthText(tabInnerHtmlText);
+
       const response = await fetch(`${apiUrl}/completions`, {
         method: 'POST',
         headers: {
@@ -100,7 +152,7 @@ function App() {
             (Any conclusions made in the content, the final thoughts of the speaker, etc.)` +
             `The content is as follows: ${validPrompt}`,
           temperature: 0.7,
-          max_tokens: 300,
+          max_tokens: 500,
           top_p: 1.0,
           frequency_penalty: 0.0,
           presence_penalty: 0.0,
@@ -108,33 +160,78 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error?.message || 
+          `API request failed with status ${response.status}`
+        );
       }
 
       const data = await response.json();
-      setText(data.choices[0].text);
+      setSummary(data.choices[0].text);
+      showNotification('Summary generated successfully!', 'success');
     } catch (error) {
-      setText(`Error: ${error.message}`);
+      console.error('Summarization error:', error);
+      setSummary(`Error: ${error.message}`);
+      showNotification(`Failed to generate summary: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const fetchModels = async () => {
+    if (!apiKey) {
+      showNotification('Please enter your API key first', 'warning');
+      return;
+    }
+    
+    if (!apiUrl && apiUrlType === 'Custom') {
+      showNotification('Please enter a valid API URL', 'warning');
+      return;
+    }
+    
+    setLoadingModels(true);
+    
     try {
-      const response = await fetch(`${apiUrl}/models`, {
+      const effectiveUrl = apiUrlType === 'Custom' ? apiUrl : apiUrlType;
+      const response = await fetch(`${effectiveUrl}/models`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error?.message || 
+          `Failed to fetch models (Status: ${response.status})`
+        );
+      }
+      
       const data = await response.json();
+      
+      if (!data.data || !Array.isArray(data.data)) {
+        throw new Error('Invalid response format from API');
+      }
+      
       const sortedModels = data.data.sort(
         (a, b) => new Date(b.created) - new Date(a.created)
       );
+      
       setModels(sortedModels);
+      showNotification('Models loaded successfully', 'success');
+      
+      // Auto-select first model if none selected
+      if (sortedModels.length > 0 && !selectedModel) {
+        setSelectedModel(sortedModels[0].id);
+      }
     } catch (error) {
-      setText('Failed to fetch models. Check your API settings.');
+      console.error('Error fetching models:', error);
+      showNotification(`Failed to fetch models: ${error.message}`, 'error');
+      setModels([]);
+    } finally {
+      setLoadingModels(false);
     }
   };
 
@@ -151,10 +248,19 @@ function App() {
     });
   }, []);
 
+  // Auto-fetch models when API key and URL are set
+  useEffect(() => {
+    if (apiKey && (apiUrlType !== 'Custom' || apiUrl)) {
+      fetchModels();
+    }
+  }, []);
+
   const saveSettings = () => {
+    const effectiveApiUrl = apiUrlType === 'Custom' ? apiUrl : apiUrlType;
+    
     const settings = {
       apiKey,
-      apiUrl: apiUrlType === 'Custom' ? apiUrl : apiUrlType,
+      apiUrl: effectiveApiUrl,
       selectedModel,
       apiUrlType
     };
@@ -162,8 +268,11 @@ function App() {
     console.log('Saving settings:', settings);
     chrome.storage.sync.set(settings, () => {
       console.log('Settings saved to storage');
+      showNotification('Settings saved successfully', 'success');
       setSettingsOpen(false);
-      if (apiUrlType !== 'https://api.openai.com/v1') {
+      
+      // Fetch models after saving settings if we have the necessary data
+      if (apiKey && effectiveApiUrl) {
         fetchModels();
       }
     });
@@ -177,74 +286,153 @@ function App() {
     if (value !== 'Custom') {
       setApiUrl(''); // Clear custom URL when switching to predefined
     }
+    
+    // Reset models when changing API URL type
+    setModels([]);
+    setSelectedModel('');
   };
 
   return (
     <Box
       sx={{
-        width: '300px',
+        width: '350px',
         height: '500px',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        padding: '12px',
+        backgroundColor: '#f5f5f5',
       }}
     >
-      <Typography
-        sx={{
-          fontSize: 25,
-          fontWeight: '550',
-          color: '#00ab01',
-          textAlign: 'center',
-          marginTop: '10px',
-        }}
-      >
-        Summarizer
-      </Typography>
-      <Typography
-        sx={{
-          fontSize: 15,
-          fontWeight: '550',
-          color: '#212429',
-          textAlign: 'center',
-          marginTop: '10px',
-        }}
-      >
-        Get summary of this web page
-      </Typography>
-      <Box sx={{ display: 'flex', gap: 2 }}>
-        <Button variant='outlined' onClick={() => setSettingsOpen(true)}>
-          Settings
-        </Button>
-        <Button
+      <Paper elevation={2} sx={{ padding: '12px', mb: 2 }}>
+        <Typography
           sx={{
-            fontSize: 16,
-            backgroundColor: '#00ab01',
-            color: 'white',
-            '&:hover': {
-              backgroundColor: 'white',
-              color: '#00ab01',
-            },
+            fontSize: 24,
+            fontWeight: '600',
+            color: '#00ab01',
+            textAlign: 'center',
           }}
-          onClick={fetchSummary}
-          disabled={!selectedModel}
         >
-          {loading ? <CircularProgress color='inherit' /> : <>Summarize</>}
-        </Button>
-      </Box>
+          SummarizerNG
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: 14,
+            color: '#555',
+            textAlign: 'center',
+            mb: 2,
+          }}
+        >
+          Get an AI-powered summary of this web page
+        </Typography>
+        
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 1 }}>
+          <Tooltip title="Settings">
+            <Button 
+              variant='outlined' 
+              onClick={() => setSettingsOpen(true)}
+              startIcon={<SettingsIcon />}
+              size="small"
+            >
+              Settings
+            </Button>
+          </Tooltip>
+          
+          <Button
+            variant="contained"
+            sx={{
+              backgroundColor: '#00ab01',
+              color: 'white',
+              '&:hover': {
+                backgroundColor: '#008c01',
+              },
+              '&.Mui-disabled': {
+                backgroundColor: '#cccccc',
+              }
+            }}
+            onClick={fetchSummary}
+            disabled={loading || !selectedModel || !apiKey}
+            startIcon={loading ? <CircularProgress size={20} color='inherit' /> : <SummarizeIcon />}
+            size="small"
+          >
+            {loading ? 'Processing...' : 'Summarize'}
+          </Button>
+        </Box>
+      </Paper>
 
-      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)}>
+      <Paper 
+        elevation={1} 
+        sx={{ 
+          flex: 1, 
+          padding: '12px', 
+          overflowY: 'auto',
+          position: 'relative',
+          backgroundColor: summary ? '#fff' : '#f9f9f9'
+        }}
+      >
+        {summary && (
+          <Tooltip title="Copy to clipboard">
+            <IconButton 
+              size="small" 
+              sx={{ position: 'absolute', top: 5, right: 5 }}
+              onClick={copyToClipboard}
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        
+        {!summary && !loading && (
+          <Typography
+            sx={{
+              color: '#666',
+              textAlign: 'center',
+              fontSize: 14,
+              mt: 8
+            }}
+          >
+            Click "Summarize" to generate a summary of the current page
+          </Typography>
+        )}
+        
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+            <CircularProgress color="success" />
+          </Box>
+        )}
+        
+        {summary && (
+          <Typography
+            sx={{
+              fontSize: 13,
+              color: '#212429',
+              textAlign: 'justify',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              paddingRight: '20px', // Space for copy button
+            }}
+          >
+            {summary}
+          </Typography>
+        )}
+      </Paper>
+
+      <Dialog 
+        open={settingsOpen} 
+        onClose={() => setSettingsOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>API Settings</DialogTitle>
-        <DialogContent>
+        <DialogContent dividers>
           <TextField
             select
             fullWidth
-            label='API URL Type'
+            label='API Provider'
             value={apiUrlType}
-            onChange={(e) => {
-              setApiUrlType(e.target.value);
-              setShowCustomUrl(e.target.value === '');
-            }}
+            onChange={handleApiUrlTypeChange}
             margin='normal'
+            variant="outlined"
+            size="small"
           >
             {predefinedApiUrls.map((option) => (
               <MenuItem key={option.url} value={option.url}>
@@ -252,6 +440,7 @@ function App() {
               </MenuItem>
             ))}
           </TextField>
+          
           {showCustomUrl && (
             <TextField
               fullWidth
@@ -260,18 +449,41 @@ function App() {
               onChange={(e) => setApiUrl(e.target.value)}
               margin='normal'
               placeholder="https://your-custom-api-url.com/v1"
+              variant="outlined"
+              size="small"
+              helperText="Enter the base URL for your API endpoint"
             />
           )}
-          {showCustomUrl && (
+          
+          <TextField
+            fullWidth
+            label='API Key'
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            margin='normal'
+            type='password'
+            variant="outlined"
+            size="small"
+            required
+            helperText="Your API key is stored locally and never shared"
+          />
+          
+          <Divider sx={{ my: 2 }} />
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ mr: 1 }}>
+              Available Models:
+            </Typography>
             <Button 
               onClick={fetchModels} 
               variant="outlined" 
-              sx={{ mt: 2 }}
-              disabled={!apiUrl}
+              size="small"
+              disabled={loadingModels || !apiKey || (showCustomUrl && !apiUrl)}
             >
-              Fetch Models
+              {loadingModels ? <CircularProgress size={20} /> : 'Refresh Models'}
             </Button>
-          )}
+          </Box>
+          
           <TextField
             select
             fullWidth
@@ -280,39 +492,45 @@ function App() {
             onChange={(e) => setSelectedModel(e.target.value)}
             margin='normal'
             disabled={models.length === 0}
+            variant="outlined"
+            size="small"
+            helperText={models.length === 0 ? "Click 'Refresh Models' to load available models" : ""}
           >
             {models.map((model) => (
               <MenuItem key={model.id} value={model.id}>
-                {model.id} (Created: {new Date(model.created).toLocaleDateString()})
+                {model.id}
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            fullWidth
-            label='API Key'
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            margin='normal'
-            type='password'
-          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSettingsOpen(false)}>Cancel</Button>
-          <Button onClick={saveSettings}>Save</Button>
+          <Button onClick={() => setSettingsOpen(false)} color="inherit">Cancel</Button>
+          <Button 
+            onClick={saveSettings} 
+            variant="contained" 
+            color="primary"
+            disabled={!apiKey || (showCustomUrl && !apiUrl)}
+          >
+            Save Settings
+          </Button>
         </DialogActions>
       </Dialog>
-      <Typography
-        sx={{
-          padding: '3px',
-          fontSize: 12,
-          fontWeight: '500',
-          color: '#212429',
-          textAlign: 'justify',
-          marginTop: '20px',
-        }}
+      
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        {text}
-      </Typography>
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity} 
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
