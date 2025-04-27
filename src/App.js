@@ -52,7 +52,7 @@ function App() {
         },
         body: JSON.stringify({
           model: selectedModel,
-      prompt: `Think step by step and provide a clear, concise, yet comprehensive summary of the provided content. Your task is to distil the content into a structured written format, using markdown for readability and organization. 
+          prompt: `Think step by step and provide a clear, concise, yet comprehensive summary of the provided content. Your task is to distil the content into a structured written format, using markdown for readability and organization. 
 
         In your summary, please ensure to:
 
