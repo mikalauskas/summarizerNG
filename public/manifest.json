@@ -15,6 +15,7 @@
   "permissions": [
     "tabs",
     "notifications",
+    "storage",
     "http://*/",
     "https://*/",
     "scripting"

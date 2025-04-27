@@ -7,6 +7,11 @@ import { Configuration, OpenAIApi } from "openai";
 function App() {
   const [text, setText] = useState();
   const [loading, setLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [apiUrl, setApiUrl] = useState('https://api.openai.com/v1');
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState('');
 
   const configuration = new Configuration({
     apiKey: process.env.REACT_APP_OPENAI_API_KEY,
@@ -43,8 +48,14 @@ function App() {
     const tabInnerHtmlText = await getCurrentTabHtml();
     const validPrompt = getValidLengthText(tabInnerHtmlText)
 
-    const response = await openai.createCompletion({
-      model: "text-davinci-003",
+    const response = await fetch(`${apiUrl}/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: selectedModel,
       prompt: `Think step by step and provide a clear, concise, yet comprehensive summary of the provided content. Your task is to distil the content into a structured written format, using markdown for readability and organization. 
 
         In your summary, please ensure to:
@@ -86,6 +97,38 @@ function App() {
     setLoading(false);
   };
 
+  const fetchModels = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/models`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      const sortedModels = data.data.sort((a, b) => 
+        new Date(b.created) - new Date(a.created)
+      );
+      setModels(sortedModels);
+    } catch (error) {
+      setText('Failed to fetch models. Check your API settings.');
+    }
+  };
+
+  useEffect(() => {
+    chrome.storage.sync.get(['apiKey', 'apiUrl'], (result) => {
+      if (result.apiKey) setApiKey(result.apiKey);
+      if (result.apiUrl) setApiUrl(result.apiUrl);
+    });
+  }, []);
+
+  const saveSettings = () => {
+    chrome.storage.sync.set({ apiKey, apiUrl }, () => {
+      setSettingsOpen(false);
+      fetchModels();
+    });
+  };
+
   return (
     <Box
       sx={{
@@ -118,22 +161,54 @@ function App() {
       >
         Get summary of this web page
       </Typography>
-      <Button
-        sx={{
-          fontSize: 16,
-          backgroundColor: "#00ab01",
-          color: "white",
-          width: "40%",
-          marginTop: "40px",
-          "&:hover": {
-            backgroundColor: "white",
-            color: "#00ab01",
-          },
-        }}
-        onClick={fetchSummary}
-      >
-        {loading ? <CircularProgress color="inherit" /> : <>Summarize</>}
-      </Button>
+      <Box sx={{ display: 'flex', gap: 2 }}>
+        <Button
+          variant="outlined"
+          onClick={() => setSettingsOpen(true)}
+        >
+          Settings
+        </Button>
+        <Button
+          sx={{
+            fontSize: 16,
+            backgroundColor: "#00ab01",
+            color: "white",
+            "&:hover": {
+              backgroundColor: "white",
+              color: "#00ab01",
+            },
+          }}
+          onClick={fetchSummary}
+          disabled={!selectedModel}
+        >
+          {loading ? <CircularProgress color="inherit" /> : <>Summarize</>}
+        </Button>
+      </Box>
+
+      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)}>
+        <DialogTitle>API Settings</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="API URL"
+            value={apiUrl}
+            onChange={(e) => setApiUrl(e.target.value)}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="API Key"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            margin="normal"
+            type="password"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSettingsOpen(false)}>Cancel</Button>
+          <Button onClick={saveSettings}>Save</Button>
+        </DialogActions>
+      </Dialog>
       <Typography
         sx={{
           padding: "3px",
