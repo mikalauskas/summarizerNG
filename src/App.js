@@ -223,7 +223,10 @@ function App() {
             fullWidth
             label='API URL Type'
             value={apiUrlType}
-            onChange={handleApiUrlTypeChange}
+            onChange={(e) => {
+              setApiUrlType(e.target.value);
+              setShowCustomUrl(e.target.value === '');
+            }}
             margin='normal'
           >
             {predefinedApiUrls.map((option) => (
@@ -239,10 +242,16 @@ function App() {
               value={apiUrl}
               onChange={(e) => setApiUrl(e.target.value)}
               margin='normal'
+              placeholder="https://your-custom-api-url.com/v1"
             />
           )}
           {showCustomUrl && (
-            <Button onClick={fetchModels} variant="outlined" sx={{ mt: 2 }}>
+            <Button 
+              onClick={fetchModels} 
+              variant="outlined" 
+              sx={{ mt: 2 }}
+              disabled={!apiUrl}
+            >
               Fetch Models
             </Button>
           )}
@@ -257,7 +266,7 @@ function App() {
           >
             {models.map((model) => (
               <MenuItem key={model.id} value={model.id}>
-                {model.id}
+                {model.id} (Created: {new Date(model.created).toLocaleDateString()})
               </MenuItem>
             ))}
           </TextField>
