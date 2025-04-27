@@ -19,6 +19,7 @@ import {
   Divider
 } from '@mui/material';
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 function App() {
   const [summary, setSummary] = useState('');
@@ -588,18 +589,17 @@ function App() {
         )}
         
         {summary && (
-          <Typography
+          <Box
             sx={{
               fontSize: 13,
               color: '#212429',
               textAlign: 'justify',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
               paddingRight: '20px', // Space for copy button
             }}
+            className="markdown-body"
           >
-            {summary}
-          </Typography>
+            <ReactMarkdown>{summary}</ReactMarkdown>
+          </Box>
         )}
       </Paper>
 
