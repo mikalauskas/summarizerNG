@@ -433,7 +433,7 @@ function App() {
       if (debugMode) logDebug('INFO', 'Auto-fetching models on startup');
       fetchModels();
     }
-  }, []);
+  }, [apiKey, apiUrl, apiUrlType, debugMode]);
 
   const saveSettings = () => {
     const effectiveApiUrl = apiUrlType === 'Custom' ? apiUrl : apiUrlType;
