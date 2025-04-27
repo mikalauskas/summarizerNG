@@ -152,11 +152,18 @@ function App() {
   }, []);
 
   const saveSettings = () => {
-    const finalUrl = apiUrlType === 'Custom' ? apiUrl : apiUrlType;
-    chrome.storage.sync.set({ apiKey, apiUrl: finalUrl }, () => {
-      setApiUrl(finalUrl);
+    const settings = {
+      apiKey,
+      apiUrl: apiUrlType === 'Custom' ? apiUrl : apiUrlType,
+      selectedModel,
+      apiUrlType
+    };
+    
+    console.log('Saving settings:', settings);
+    chrome.storage.sync.set(settings, () => {
+      console.log('Settings saved to storage');
       setSettingsOpen(false);
-      if (finalUrl !== 'https://api.openai.com/v1') {
+      if (apiUrlType !== 'https://api.openai.com/v1') {
         fetchModels();
       }
     });
