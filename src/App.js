@@ -13,11 +13,6 @@ function App() {
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
 
-  const configuration = new Configuration({
-    apiKey: process.env.REACT_APP_OPENAI_API_KEY,
-  });
-
-  const openai = new OpenAIApi(configuration);
 
   const getValidLengthText = (text) => {
     const validLength = 4*3200;
@@ -48,14 +43,15 @@ function App() {
     const tabInnerHtmlText = await getCurrentTabHtml();
     const validPrompt = getValidLengthText(tabInnerHtmlText)
 
-    const response = await fetch(`${apiUrl}/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: selectedModel,
+    try {
+      const response = await fetch(`${apiUrl}/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: selectedModel,
       prompt: `Think step by step and provide a clear, concise, yet comprehensive summary of the provided content. Your task is to distil the content into a structured written format, using markdown for readability and organization. 
 
         In your summary, please ensure to:
@@ -91,10 +87,19 @@ function App() {
       top_p: 1.0,
       frequency_penalty: 0.0,
       presence_penalty: 0.0,
-    });
+      });
 
-    setText(response.data.choices[0].text)
-    setLoading(false);
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      setText(data.choices[0].text);
+    } catch (error) {
+      setText(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchModels = async () => {
