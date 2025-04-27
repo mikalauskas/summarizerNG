@@ -27,7 +27,7 @@ function App() {
   const [apiKey, setApiKey] = useState('');
   const predefinedApiUrls = [
     { name: 'OpenAI Official', url: 'https://api.openai.com/v1' },
-    { name: 'Custom', url: '' }
+    { name: 'Custom', url: 'Custom' }
   ];
   const [apiUrl, setApiUrl] = useState('https://api.openai.com/v1');
   const [apiUrlType, setApiUrlType] = useState('https://api.openai.com/v1');
@@ -109,7 +109,8 @@ function App() {
       
       const validPrompt = getValidLengthText(tabInnerHtmlText);
 
-      const response = await fetch(`${apiUrl}/completions`, {
+      const effectiveUrl = apiUrlType === 'Custom' ? apiUrl : apiUrlType;
+      const response = await fetch(`${effectiveUrl}/completions`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -257,7 +258,7 @@ function App() {
     
     const settings = {
       apiKey,
-      apiUrl: effectiveApiUrl,
+      apiUrl: apiUrl, // Store the actual custom URL
       selectedModel,
       apiUrlType
     };
