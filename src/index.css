@@ -43,6 +43,29 @@ code {
   overflow-x: auto;
 }
 
+/* Debug logs styling */
+.debug-log {
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.debug-log-error {
+  color: #ff0000;
+}
+
+.debug-log-warning {
+  color: #ff9900;
+}
+
+.debug-log-info {
+  color: #0099ff;
+}
+
+.debug-log-success {
+  color: #00cc00;
+}
+
 .MuiTypography-root h1, 
 .MuiTypography-root h2, 
 .MuiTypography-root h3 {
